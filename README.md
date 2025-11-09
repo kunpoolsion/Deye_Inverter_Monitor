@@ -1,14 +1,21 @@
 Simple DEYE solar system monitor.
 
+Independent and only wifi needed.
+
 Two versions:
-  - Only web interface: any esp32 (to be uploaded). 
+  - Only web interface: any esp32. 
   - LCD + Web interface: made for Waveshare ESP32-S3-Touch-LCD-7 Display board.
 
 You can easily mod for any other board with esp32 with psram, ST7262 LCD and GT911 Touch drivers changing pins on waveshare library.
 For any other combination of 800x480 LCD/Touch driver you can use the Expressif ESP32_Display_Panel library.
-Based on LVGL 8.3.11 (limited by Waveshare library)
+Based on LVGL 8.3.11 (limited by Waveshare library).
 
-Independent and only wifi needed.
+To compile lcd version use these settings:
+  - Board: ESP32S3 Dev Module
+  - PSRAM: OPI
+  - Filesystem: Huge app
+
+To compile web version you don´t need any special setting or external libraries, everything is included in the folder.
 
 Tested on Deye Hybrid Inverters with Solarman wifi adapter.
 For any other Deye inverter (or any other inverter using solarmanv5 adapter) you can adapt modbus registers on SolarmanV5.cpp
@@ -20,6 +27,8 @@ WifiAP if no connection to change configuration (for lazy people that don´t wan
 
 Some libraries were modded, use them to avoid compilation errors!!!
 Flasheable BINs included for LCD version.
+
+BUG: To wake up the lcd after backlight auto-off sometimes you have to touch the screen more than once.
 
 ENJOY IT!
 
