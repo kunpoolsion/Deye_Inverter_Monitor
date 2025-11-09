@@ -23,8 +23,11 @@ Flasheable BINs included for LCD version.
 
 ENJOY IT!
 
+7" Inch Display:
 ![screen](https://github.com/user-attachments/assets/f3f6f1b4-889a-427d-9bbe-ad281676aaba)
 
+PC Web Interface:
 <img width="1673" height="674" alt="web_interface" src="https://github.com/user-attachments/assets/32f06721-b020-462c-995a-96069dab9d49" />
 
+Mobile Web Interface:
 ![mobile_web](https://github.com/user-attachments/assets/c0fefa4c-32c6-4546-b1c2-73415209c53b)
