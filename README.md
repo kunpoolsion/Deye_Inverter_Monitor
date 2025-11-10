@@ -28,7 +28,7 @@ WifiAP if no connection to change configuration (for lazy people that don´t wan
 Some libraries were modded, use them to avoid compilation errors!!!
 Flasheable BINs included for LCD version.
 
-BUG: To wake up the lcd after backlight auto-off sometimes you have to touch the screen more than once.
+BUG: Sometimes you have to touch more than once to wake up the lcd from sleep (to be investigated).
 
 ENJOY IT!
 
