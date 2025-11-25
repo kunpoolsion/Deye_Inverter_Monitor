@@ -12,13 +12,13 @@
 #include "DeyeInverter.h"
 
 // ===== CONFIGURACIÓN POR DEFECTO
-const char* DEFAULT_SSID = "wifissid";               // nombre de la wifi
-const char* DEFAULT_PASS = "wifipass";               // pass de la wifi
+const char* DEFAULT_SSID = "ssid";               // nombre de la wifi
+const char* DEFAULT_PASS = "pass";               // pass de la wifi
 const uint32_t DEFAULT_DATALOGGER_SN = 1234567890;   // SN del datalogger
 const char* DEFAULT_DATALOGGER_IP = "192.168.1.10";  // ip del datalogger
 const int16_t DEFAULT_POTENCIA = 6000;               // potencia del inversor, W
 const int16_t DEFAULT_ESPERA = 15;                   // espera hasta apagar pantalla,minutos
-const uint32_t DEFAULT_READ_INTERVAL = 10;           // intervalo entre lecturas del inversor, segundos
+const uint32_t DEFAULT_READ_INTERVAL = 15;           // intervalo entre lecturas del inversor, segundos
 
 // ===== VARIABLES DE CONFIGURACIÓN
 String config_ssid = DEFAULT_SSID;
@@ -68,6 +68,39 @@ lv_color_t color_danger = lv_color_hex(0xFF6666);
 lv_color_t color_warn = lv_color_hex(0xFFAA00);
 
 WebServer server(80);
+
+#define GT911_INT_PIN 4
+
+volatile bool touchDetected = false;
+unsigned long lastTouchTime = 0;
+
+// ISR para la interrupción del touch
+void IRAM_ATTR touchISR() {
+    touchDetected = true;
+    lastTouchTime = millis();
+}
+
+void setupTouchInterrupt() {
+    // Configurar el pin INT como entrada con pull-up
+    pinMode(GT911_INT_PIN, INPUT_PULLUP);
+    
+    // Configurar interrupción en flanco de bajada (activo en bajo)
+    attachInterrupt(digitalPinToInterrupt(GT911_INT_PIN), touchISR, FALLING);
+    
+    Serial.println("Interrupción de touch configurada en GPIO4");
+}
+
+void checkTouchInterrupt() {
+    if (touchDetected) {
+        touchDetected = false;
+        lastUserActivity = millis();
+        
+        if (!screenOn) {
+            setScreenBacklight(true);
+            Serial.println("Pantalla reactivada por interrupción de touch");
+        }
+    }
+}
 
 // ===== FUNCIONES DE CONFIGURACIÓN =====
 void loadConfig() {
@@ -224,14 +257,6 @@ void setScreenBacklight(bool on) {
     }
 }
 
-void touch_activity_cb(lv_event_t *e) {
-    (void)e;
-    lastUserActivity = millis();
-    if (!screenOn) {
-        setScreenBacklight(true);
-    }
-}
-
 bool init_display() {
     Serial.println("Inicializando pantalla...");
     lcd_init();
@@ -253,9 +278,6 @@ void create_ui() {
     lvgl_port_lock(-1);
     lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x0A0A0A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_add_event_cb(lv_scr_act(), touch_activity_cb, LV_EVENT_PRESSED, NULL);
-    lv_obj_add_event_cb(lv_scr_act(), touch_activity_cb, LV_EVENT_PRESSING, NULL);
-    lv_obj_add_event_cb(lv_scr_act(), touch_activity_cb, LV_EVENT_LONG_PRESSED, NULL);
 
     // FECHA Y HORA
     label_datetime = lv_label_create(lv_scr_act());
@@ -266,7 +288,7 @@ void create_ui() {
 
     // TEMPERATURA DEL INVERSOR
     label_inverter_temp = lv_label_create(lv_scr_act());
-    lv_label_set_text(label_inverter_temp, "Inversor: --°C");
+    lv_label_set_text(label_inverter_temp, "Inv: --°dc / --°ac");
     lv_obj_set_style_text_font(label_inverter_temp, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(label_inverter_temp, lv_color_hex(0xAAAAAA), 0);
     lv_obj_align(label_inverter_temp, LV_ALIGN_TOP_MID, 0, 5);
@@ -316,7 +338,7 @@ void create_ui() {
     lv_obj_center(cont_solar);
     label_solar = lv_label_create(cont_solar);
     lv_label_set_text(label_solar, "0");
-    lv_obj_set_style_text_font(label_solar, &lv_font_montserrat_38, 0);
+    lv_obj_set_style_text_font(label_solar, &lv_font_montserrat_44, 0);
     lv_obj_set_style_text_color(label_solar, lv_color_white(), 0);
     lv_obj_t* unit_solar = lv_label_create(cont_solar);
     lv_label_set_text(unit_solar, "kW");
@@ -347,12 +369,12 @@ void create_ui() {
     lv_obj_align(title_bat, LV_ALIGN_TOP_LEFT, 12, 12);
     arc_bat = lv_arc_create(card2);
     lv_obj_set_size(arc_bat, 180, 180);
-    lv_arc_set_range(arc_bat, 0, 100);
+    lv_arc_set_range(arc_bat, 0, potencia);
     lv_arc_set_value(arc_bat, 0);
     lv_arc_set_bg_angles(arc_bat, 150, 30);
     lv_obj_set_style_arc_color(arc_bat, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc_bat, 20, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_bat, color_success, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(arc_bat, lv_color_white(), LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(arc_bat, 20, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_bat, NULL, LV_PART_KNOB);
     lv_obj_center(arc_bat);
@@ -366,7 +388,7 @@ void create_ui() {
     lv_obj_center(cont_bat);
     label_bat = lv_label_create(cont_bat);
     lv_label_set_text(label_bat, "0");
-    lv_obj_set_style_text_font(label_bat, &lv_font_montserrat_38, 0);
+    lv_obj_set_style_text_font(label_bat, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(label_bat, lv_color_white(), 0);
     lv_obj_t* unit_bat = lv_label_create(cont_bat);
     lv_label_set_text(unit_bat, "%");
@@ -421,7 +443,7 @@ void create_ui() {
     lv_obj_center(cont_red);
     label_red = lv_label_create(cont_red);
     lv_label_set_text(label_red, "0");
-    lv_obj_set_style_text_font(label_red, &lv_font_montserrat_38, 0);
+    lv_obj_set_style_text_font(label_red, &lv_font_montserrat_44, 0);
     lv_obj_set_style_text_color(label_red, lv_color_white(), 0);
     lv_obj_t* unit_red = lv_label_create(cont_red);
     lv_label_set_text(unit_red, "kW");
@@ -471,7 +493,7 @@ void create_ui() {
     lv_obj_center(cont_home);
     label_home = lv_label_create(cont_home);
     lv_label_set_text(label_home, "0");
-    lv_obj_set_style_text_font(label_home, &lv_font_montserrat_38, 0);
+    lv_obj_set_style_text_font(label_home, &lv_font_montserrat_44, 0);
     lv_obj_set_style_text_color(label_home, lv_color_white(), 0);
     lv_obj_t* unit_home = lv_label_create(cont_home);
     lv_label_set_text(unit_home, "kW");
@@ -512,8 +534,9 @@ void inverterReadTask(void *parameter) {
                     strftime(datetime_str, sizeof(datetime_str), "%d/%m/%Y %H:%M", &local_time);
                     if (label_datetime) lv_label_set_text(label_datetime, datetime_str);
                     if (label_inverter_temp) {
-                        char temp_str[16];
-                        snprintf(temp_str, sizeof(temp_str), "T.Inv %.1f°C ", inv_data.inverter_temperature);
+                        char temp_str[32];
+                        snprintf(temp_str, sizeof(temp_str), "Inv: %.1f°dc / %.1f°ac", 
+                                inv_data.inverter_temperature, inv_data.inverter_temperature_ac);
                         lv_label_set_text(label_inverter_temp, temp_str);
                     }
 
@@ -528,12 +551,12 @@ void inverterReadTask(void *parameter) {
                         snprintf(buf, sizeof(buf), "%dW y %dW - Hoy: %.2f kWh", pv1, pv2, inv_data.daily_production);
                         lv_label_set_text(label_pv1_pv2, buf);
                     }
-
                     if (arc_bat) {
-                        lv_arc_set_value(arc_bat, soc);
-                        lv_color_t bat_color = soc > 70 ? color_success : soc > 30 ? color_warn : color_danger;
+                        lv_arc_set_value(arc_bat, abs(bat_power));
+                        lv_color_t bat_color = (bat_power > 0) ? color_danger : color_success;
                         lv_obj_set_style_arc_color(arc_bat, bat_color, LV_PART_INDICATOR);
                     }
+
                     if (label_bat) {
                         String val = String(soc);
                         lv_label_set_text(label_bat, val.c_str());
@@ -600,6 +623,7 @@ void handleJson() {
     }
     String json = "{";
     json += "\"inv_temp\":" + String(inv_data.inverter_temperature, 1) + ",";
+    json += "\"inv_temp_ac\":" + String(inv_data.inverter_temperature_ac, 1) + ",";
     json += "\"solar\":" + String((int)(inv_data.pv1_power + inv_data.pv2_power)) + ",";
     json += "\"pv1\":" + String((int)inv_data.pv1_power) + ",";
     json += "\"pv2\":" + String((int)inv_data.pv2_power) + ",";
@@ -700,7 +724,7 @@ const char WEBSITE[] PROGMEM = R"rawliteral(
 </head>
 <body>
     <div style="text-align:center; margin-bottom:10px; font-size:1.1em; color:#AAAAAA;">
-        <div id="datetime">--/--/---- --:--</div><div id="inverter_temp">Inv: --°C</div>
+        <div id="datetime">--/--/---- --:--</div><div id="inverter_temp">Inv: --°dc / --°ac</div>
     </div>
     <div class="grid">
         <div class="card">
@@ -805,12 +829,12 @@ const char WEBSITE[] PROGMEM = R"rawliteral(
                     document.getElementById('grid').className = d.grid > 0 ? 'value danger' : 'value success';
                     document.getElementById('bought').textContent = 'Hoy: ' + d.daily_bought.toFixed(2) + ' kWh';
                     document.getElementById('bought').className = 'detail ' + (d.daily_bought > 0 ? 'danger' : '');
-                    drawArc('bat-arc', d.soc, 100);
+                    const batpow = Math.abs(d.bat_power);
+                    drawArc('bat-arc', batpow, 6000);
                     document.getElementById('soc').textContent = d.soc;
                     const batPath = document.getElementById('bat-arc');
-                    if (d.soc <= 30) batPath.setAttribute('stroke', '#FF6666');
-                    else if (d.soc <= 70) batPath.setAttribute('stroke', '#FFAA00');
-                    else batPath.setAttribute('stroke', '#39FF14');
+                    if (d.bat_power < 0) batPath.setAttribute('stroke', '#39FF14');
+                    else batPath.setAttribute('stroke', '#FF6666');
                     drawArc('home-arc', d.home, 6000);
                     document.getElementById('home').textContent = (d.home / 1000).toFixed(2);
                     document.getElementById('pv1pv2').textContent = 
@@ -819,7 +843,8 @@ const char WEBSITE[] PROGMEM = R"rawliteral(
                     batPowerEl.textContent = d.bat_power + 'W';
                     batPowerEl.className = 'detail ' + (d.bat_power < 0 ? 'success' : 'danger');
                     document.getElementById('load').textContent = 'Hoy: ' + d.daily_load.toFixed(2) + ' kWh';
-                    document.getElementById('inverter_temp').textContent = 'Inv: ' + d.inv_temp.toFixed(1) + '°C';
+                    document.getElementById('inverter_temp').textContent = 
+    'Inv: ' + d.inv_temp.toFixed(1) + '°dc / ' + d.inv_temp_ac.toFixed(1) + '°ac';
                     document.getElementById('bat_temp').textContent = d.bat_temp.toFixed(1) + '°C';
                 })
                 .catch(err => console.error('Error:', err));
@@ -831,7 +856,7 @@ const char WEBSITE[] PROGMEM = R"rawliteral(
             const str = ('0'+now.getDate()).slice(-2) + '/' + ('0'+(now.getMonth()+1)).slice(-2) + '/' + now.getFullYear() + 
                         ' ' + ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2);
             document.getElementById('datetime').textContent = str;
-        }, 60000);
+        }, 10000);
     </script>
 </body>
 </html>
@@ -847,6 +872,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("=== MONITOR SOLAR ===");
 
+    WiFi.setHostname("solar");
     connectWiFiWithFallback();
     delay(1000);
 
@@ -885,6 +911,10 @@ void setup() {
     }
 
     create_ui();
+    
+    // Configurar detección por interrupción
+    setupTouchInterrupt();
+
     const char* datalogger_ip_used = config_datalogger_ip.c_str();
     solarman = new SolarmanV5(config_datalogger_ip.c_str(), config_datalogger_sn);
     inverter = new DeyeInverter(solarman);
@@ -900,16 +930,14 @@ void loop() {
     if (inApMode) {
         dnsServer.processNextRequest();
     }
+    
+    // Verificar interrupción de touch
+    checkTouchInterrupt();
+    
     if (screenOn && (millis() - lastUserActivity >= SCREEN_OFF_TIMEOUT_MS)) {
         setScreenBacklight(false);
-        //Serial.println("Apagando pantalla LCD");
     }
 
     static unsigned long last_status = 0;
-    //if (millis() - last_status > 30000) {
-    //    Serial.printf("Sistema activo - Pantalla: %s - Memoria libre: %d\n",
-    //                  screenOn ? "ON" : "OFF", esp_get_free_heap_size());
-    //    last_status = millis();
-    //}
     delay(10);
 }

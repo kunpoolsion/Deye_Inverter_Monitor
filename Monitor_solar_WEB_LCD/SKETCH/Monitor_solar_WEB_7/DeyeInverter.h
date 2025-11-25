@@ -43,6 +43,7 @@ struct InverterData {
     String running_status;
     String work_mode;
     float inverter_temperature;
+    float inverter_temperature_ac;
     
     // Flags
     bool data_valid;

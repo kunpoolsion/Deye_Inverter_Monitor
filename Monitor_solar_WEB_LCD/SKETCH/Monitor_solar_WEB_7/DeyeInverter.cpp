@@ -227,6 +227,10 @@ bool DeyeInverter::readInverterData(InverterData *data) {
     if (_solarman->readRegister(0x005A, &value)) {
         data->inverter_temperature = (value * 0.1) - 100.0;
     } else return false;
+
+    if (_solarman->readRegister(0x005B, &value)) {
+        data->inverter_temperature_ac = (value * 0.1) - 100.0;
+    } else return false;
     
     return true;
 }
