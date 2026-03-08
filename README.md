@@ -30,6 +30,13 @@ Flasheable BINs included for LCD version.
 
 3D Printable back case: https://www.thingiverse.com/thing:6701545.
 
+Instructions:
+- Flash firmware.
+- Turn On.
+- Connect to "MonitorSolar" wiifi.
+- Open Settings page and configure Wifi, IP and Serial of datalogger.
+- Reset.
+
 ENJOY IT!
 
 7" Inch Display:
